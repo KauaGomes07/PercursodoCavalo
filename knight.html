@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Percurso do Cavalo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #ffe0b2, #ffcc80);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      color: #4e342e;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 2px #00000033;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px);
+      gap: 0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .cell {
+      width: 60px;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.5rem;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .white {
+      background-color: #deb887;
+    }
+
+    .black {
+      background-color: #8b4513;
+    }
+
+    .visited {
+      background-color: #ffffff !important;
+    }
+
+    .knight {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      pointer-events: none;
+      text-shadow: 1px 1px 2px #000;
+    }
+
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .inputs {
+      margin-bottom: 10px;
+    }
+
+    input[type="text"] {
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #aaa;
+      margin-right: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      background: linear-gradient(to bottom, #6b4c3b, #3e2723);
+      color: white;
+      border-radius: 8px;
+      margin: 5px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s ease-in-out;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+    }
+
+    #moves {
+      margin-top: 10px;
+      font-weight: bold;
+      color: #4e342e;
+      font-size: 18px;
+    }
+
+    table {
+      margin-top: 20px;
+      border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px 15px;
+      text-align: center;
+      border-bottom: 1px solid #ccc;
+    }
+
+    th {
+      background-color: #6b4c3b;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Missão Cavalo ♞</h1>
+  <div class="board" id="board"></div>
+
+  <div class="controls">
+    <div class="inputs">
+      <input type="text" id="playerName" placeholder="Digite seu nome">
+    </div>
+    <div>
+      <button onclick="resetGame()">Reiniciar</button>
+      <button onclick="startAutoSolve()">Resolução Automática</button>
+    </div>
+    <span id="moves">Casas visitadas: 0</span>
+  </div>
+
+  <h2>Ranking</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Jogador</th>
+        <th>Casas Visitadas</th>
+      </tr>
+    </thead>
+    <tbody id="rankingBody">
+      <!-- Ranking aparece aqui -->
+    </tbody>
+  </table>
+
+  <script>
+    const board = document.getElementById("board");
+    const rankingBody = document.getElementById("rankingBody");
+    const knightSymbol = "♞";
+    let knightPosition = null;
+    let visited = [];
+    let solving = false;
+    let moveCount = 0;
+    let ranking = [];
+
+    const directions = [
+      [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+      [1, -2], [1, 2], [2, -1], [2, 1],
+    ];
+
+    function createBoard() {
+      board.innerHTML = "";
+      visited = Array.from({ length: 8 }, () => Array(8).fill(false));
+      moveCount = 0;
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const cell = document.createElement("div");
+          cell.className = `cell ${(row + col) % 2 === 0 ? "white" : "black"}`;
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+          cell.addEventListener("click", () => {
+            if (!knightPosition && !solving) placeKnight(row, col);
+            else if (!solving) moveKnight(row, col);
+          });
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    function placeKnight(row, col) {
+      clearKnight();
+      const index = row * 8 + col;
+      const cell = board.children[index];
+
+      if (!visited[row][col]) {
+        moveCount++;
+        visited[row][col] = moveCount;
+        cell.classList.add("visited");
+        const moveText = document.createElement("div");
+        moveText.textContent = moveCount;
+        moveText.style.position = "absolute";
+        moveText.style.fontSize = "16px";
+        moveText.style.color = "#000";
+        moveText.style.fontWeight = "bold";
+        moveText.style.bottom = "2px";
+        moveText.style.right = "4px";
+        cell.appendChild(moveText);
+      }
+
+      const knight = document.createElement("div");
+      knight.className = "knight";
+      knight.innerHTML = knightSymbol;
+      cell.appendChild(knight);
+
+      knightPosition = { row, col };
+      updateCounter();
+    }
+
+    function moveKnight(row, col) {
+      if (!knightPosition) {
+        placeKnight(row, col);
+        return;
+      }
+      if (isValidMove(row, col)) {
+        placeKnight(row, col);
+        if (!hasMovesLeft()) {
+          endGame();
+        }
+      }
+    }
+
+    function clearKnight() {
+      document.querySelectorAll(".knight").forEach(k => k.remove());
+    }
+
+    function isValidMove(row, col) {
+      if (visited[row][col]) return false;
+      const dr = Math.abs(row - knightPosition.row);
+      const dc = Math.abs(col - knightPosition.col);
+      return (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
+    }
+
+    function hasMovesLeft() {
+      const { row, col } = knightPosition;
+      return directions.some(([dr, dc]) => {
+        const nr = row + dr;
+        const nc = col + dc;
+        return nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !visited[nr][nc];
+      });
+    }
+
+    function countVisited() {
+      return moveCount;
+    }
+
+    function resetGame() {
+      knightPosition = null;
+      solving = false;
+      createBoard();
+      updateCounter();
+    }
+
+    function updateCounter() {
+      document.getElementById("moves").textContent = `Casas visitadas: ${moveCount}`;
+    }
+
+    function endGame() {
+      const playerName = document.getElementById("playerName").value.trim() || "Jogador Anônimo";
+      alert(`Fim de jogo, ${playerName}! Casas visitadas: ${countVisited()}`);
+      ranking.push({ name: playerName, score: countVisited() });
+      ranking.sort((a, b) => b.score - a.score);
+      updateRankingTable();
+    }
+
+    function updateRankingTable() {
+      rankingBody.innerHTML = "";
+      ranking.forEach(entry => {
+        const row = document.createElement("tr");
+        const nameCell = document.createElement("td");
+        const scoreCell = document.createElement("td");
+        nameCell.textContent = entry.name;
+        scoreCell.textContent = entry.score;
+        row.appendChild(nameCell);
+        row.appendChild(scoreCell);
+        rankingBody.appendChild(row);
+      });
+    }
+
+    async function startAutoSolve() {
+      if (!knightPosition) {
+        alert("Escolha uma posição inicial antes de iniciar a resolução automática.");
+        return;
+      }
+      solving = true;
+      await autoSolve(knightPosition.row, knightPosition.col);
+      solving = false;
+      if (!hasMovesLeft()) {
+        endGame();
+      }
+    }
+
+    async function autoSolve(row, col) {
+      placeKnight(row, col);
+      await sleep(300);
+
+      const moves = getValidMoves(row, col).sort(
+        (a, b) => getValidMoves(a[0], a[1]).length - getValidMoves(b[0], b[1]).length
+      );
+
+      for (const [nextRow, nextCol] of moves) {
+        if (!visited[nextRow][nextCol]) {
+          await autoSolve(nextRow, nextCol);
+          return;
+        }
+      }
+    }
+
+    function getValidMoves(row, col) {
+      return directions
+        .map(([dr, dc]) => [row + dr, col + dc])
+        .filter(([r, c]) => r >= 0 && r < 8 && c >= 0 && c < 8 && !visited[r][c]);
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    createBoard();
+  </script>
+</body>
+</html>
